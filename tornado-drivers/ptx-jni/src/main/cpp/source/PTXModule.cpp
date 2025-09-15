@@ -60,6 +60,8 @@ JNIEXPORT jbyteArray JNICALL Java_uk_ac_manchester_tornado_drivers_ptx_PTXModule
 
     CUmodule module;
     result = cuModuleLoadData(&module, ptx);
+    //cubin hack
+    //result = cuModuleLoad(&module, "/media/ruiqi/1TB_SSD/TornadoVM-1.1.0/Tornado_experiments_dump/tornado_matmul1D.cubin");
     LOG_PTX_AND_VALIDATE("cuModuleLoadData", result);
 #ifdef _WIN32
     delete[] ptx;
@@ -68,6 +70,145 @@ JNIEXPORT jbyteArray JNICALL Java_uk_ac_manchester_tornado_drivers_ptx_PTXModule
     /// FIXME
     if (result != CUDA_SUCCESS) {
         printf("PTX to cubin JIT compilation failed! (%d)\n", result);
+        fflush(stdout);
+        jbyteArray error_array = env->NewByteArray(0);
+        return error_array;
+    }
+    return from_module(env, &module);
+}
+
+/*
+ * Class:     uk_ac_manchester_tornado_drivers_ptx_PTXModule
+ * Method:    cuModuleLoadDataEx
+ * Signature:
+ */
+JNIEXPORT jbyteArray JNICALL Java_uk_ac_manchester_tornado_drivers_ptx_PTXModule_cuModuleLoadDataEx
+  (JNIEnv *env, jclass clazz, jbyteArray source) {
+    CUresult result;
+
+    size_t ptx_length = env->GetArrayLength(source);
+#ifdef _WIN32
+    char *ptx = new char[ptx_length + 1];
+#else
+    char ptx[ptx_length + 1];
+#endif
+    env->GetByteArrayRegion(source, 0, ptx_length, reinterpret_cast<jbyte *>(ptx));
+    ptx[ptx_length] = 0; // Make sure string terminates with a 0
+
+    /*jint* keys = env->GetIntArrayElements(optionKeys, nullptr);
+
+    // Allocate and process option values
+    CUjit_option* options = new CUjit_option[numOptions];
+    void** values = new void*[numOptions];
+    memset(values, 0, numOptions * sizeof(void*));
+
+    for (int i = 0; i < numOptions; i++) {
+        options[i] = static_cast<CUjit_option>(keys[i]);
+
+        jobject obj = env->GetObjectArrayElement(optionValues, i);
+        switch (options[i]) {
+            case CU_JIT_OPTIMIZATION_LEVEL:
+            /*case CU_JIT_INFO_LOG_BUFFER_SIZE_BYTES:
+            case CU_JIT_ERROR_LOG_BUFFER_SIZE_BYTES:
+            case CU_JIT_LOG_VERBOSE:*/
+            /*{
+                // Assume Integer -> get int value
+                jclass intClass = env->FindClass("java/lang/Integer");
+                jmethodID intValue = env->GetMethodID(intClass, "intValue", "()I");
+                jint val = env->CallIntMethod(obj, intValue);
+                int* valPtr = new int(val);
+                values[i] = valPtr;
+                break;
+            }
+            /*case CU_JIT_INFO_LOG_BUFFER:
+            case CU_JIT_ERROR_LOG_BUFFER:
+            {
+                const char* str = env->GetStringUTFChars((jstring)obj, nullptr);
+                char* buf = new char[strlen(str) + 1];
+                strcpy(buf, str);
+                values[i] = buf;
+                env->ReleaseStringUTFChars((jstring)obj, str);
+                break;
+            }*/
+            /*default:
+                // Unsupported or null
+                values[i] = nullptr;
+        }
+    }*/
+
+
+    /// FIXME: don't use hard coding values.
+    const unsigned int jitNumOptions = 2;
+    CUjit_option *jitOptions = new CUjit_option[jitNumOptions];
+    void **jitOptVals = new void *[jitNumOptions];
+
+    jitOptions[0] = CU_JIT_OPTIMIZATION_LEVEL;
+    int opt_level = 4;
+    jitOptVals[0] = (void *)(size_t)opt_level;
+
+    jitOptions[1] = CU_JIT_TARGET;
+    int arch_target = 120;
+    jitOptVals[1] = (void *)(size_t)arch_target;
+
+    // set up size of compilation log buffer
+    /*jitOptions[2] = CU_JIT_INFO_LOG_BUFFER_SIZE_BYTES;
+    int jitLogBufferSize = 1024;
+    jitOptVals[2] = (void *)(size_t)jitLogBufferSize;
+
+    // set up pointer to the compilation log buffer
+    jitOptions[3] = CU_JIT_INFO_LOG_BUFFER;
+    char *jitLogBuffer = new char[jitLogBufferSize];
+    jitOptVals[3] = jitLogBuffer;*/
+
+    CUmodule module;
+    result = cuModuleLoadDataEx(&module, ptx, jitNumOptions, jitOptions, (void **)jitOptVals);
+    //result = cuModuleLoadDataEx(&module, ptx, numOptions, options, values);
+
+        // Cleanup (be sure to free all allocations above)
+    /*for (int i = 0; i < numOptions; i++) {
+        if (options[i] == CU_JIT_OPTIMIZATION_LEVEL) {
+            delete[] (char*)values[i];
+        } else {
+            delete (int*)values[i];
+        }
+    }
+
+    delete[] options;
+    delete[] values;
+
+    env->ReleaseIntArrayElements(optionKeys, keys, 0);*/
+    LOG_PTX_AND_VALIDATE("cuModuleLoadDataEx", result);
+#ifdef _WIN32
+    delete[] ptx;
+#endif
+    //printf("> PTX JIT log:\n%s\n", jitLogBuffer);
+    /// FIXME
+    if (result != CUDA_SUCCESS) {
+        printf("PTX to cubin JIT compilation using cuModuleLoadDataEx failed! (%d)\n", result);
+        fflush(stdout);
+        jbyteArray error_array = env->NewByteArray(0);
+        return error_array;
+    }
+    return from_module(env, &module);
+}
+
+/*
+ * Class:     uk_ac_manchester_tornado_drivers_ptx_PTXModule
+ * Method:    cuModuleLoad
+ * Signature:
+ */
+JNIEXPORT jbyteArray JNICALL Java_uk_ac_manchester_tornado_drivers_ptx_PTXModule_cuModuleLoad
+  (JNIEnv *env, jclass clazz) {
+    CUresult result;
+    CUmodule module;
+
+    //cubin hack
+    result = cuModuleLoad(&module, "/home/ruiqi/TornadoVM/Tornado_experiments_dump/tornado_matmul1D_2.cubin");
+    LOG_PTX_AND_VALIDATE("cuModuleLoad", result);
+
+    /// FIXME
+    if (result != CUDA_SUCCESS) {
+        printf("Reading .cubin file failed! (%d)\n", result);
         fflush(stdout);
         jbyteArray error_array = env->NewByteArray(0);
         return error_array;

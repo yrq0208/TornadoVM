@@ -134,7 +134,10 @@ public class TornadoOptions {
      * Enable/Disable FMA Optimizations. True by default.
      */
     public static final boolean ENABLE_FMA = getBooleanValue("tornado.enable.fma", TRUE);
-
+    /**
+     * Enable/Disable FMA Optimizations for PTX backend. True by default.
+     */
+    public static final boolean ENABLE_PTXFMA = getBooleanValue("tornado.enable.ptxfma", TRUE);
     /**
      * Enable/Disable Loop Unroll SPIR-V instruction: True by default.
      *

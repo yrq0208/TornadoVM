@@ -64,6 +64,16 @@ public class TestMatrixMultiplicationKernelContext extends TornadoTestBase {
                 c.set(i * size + j, sum);
             }
         }
+
+        /*for (int i = 0; i < WA; i++) {
+            for (int j = 0; j < HB; j++) {
+                float sum = 0.0f;
+                for (int k = 0; k < WB; k++) {
+                    sum += a.get(i * WA + k) * b.get(k * WB + j);
+                }
+                c.set(i * WB + j, sum);
+            }
+        }*/
     }
 
     public static void matrixMultiplication1D(KernelContext context, FloatArray a, FloatArray b, FloatArray c, int size) {
@@ -73,6 +83,7 @@ public class TestMatrixMultiplicationKernelContext extends TornadoTestBase {
             float sum = 0.0f;
             for (int k = 0; k < size; k++) {
                 sum += a.get((idx * size) + k) * b.get((k * size) + jdx);
+                //sum += a.get((jdx * size) + k) * b.get((k * size) + idx); //this enable speedup
             }
             c.set((idx * size) + jdx, sum);
         }
@@ -127,19 +138,35 @@ public class TestMatrixMultiplicationKernelContext extends TornadoTestBase {
 
     @Test
     public void mxm1DKernelContext() throws TornadoExecutionPlanException {
-        final int size = 16;
+        final int size = 512;
+        /*final int WA = 512;
+        final int HA = 32;
+        final int WB = 32;
+        final int HB = WA;
+        final int WC = WB;
+        final int HC = HA;*/
         FloatArray a = new FloatArray(size * size);
         FloatArray b = new FloatArray(size * size);
         FloatArray cJava = new FloatArray(size * size);
         FloatArray cTornado = new FloatArray(size * size);
+        /*FloatArray a = new FloatArray(WA * HA);
+        FloatArray b = new FloatArray(WB * HB);
+        FloatArray cJava = new FloatArray(WC * HC);
+        FloatArray cTornado = new FloatArray(WC * HC);*/
 
         Random r = new Random();
         IntStream.range(0, size * size).forEach(i -> {
             a.set(i, r.nextFloat());
             b.set(i, r.nextFloat());
         });
+        /*IntStream.range(0, WA * HA).forEach(i -> {
+            a.set(i, r.nextFloat());
+            b.set(i, r.nextFloat());
+        });*/
 
         WorkerGrid worker = new WorkerGrid1D(size);
+        //WorkerGrid worker = new WorkerGrid1D(HA);
+        worker.setLocalWork(512,1, 1);
         GridScheduler gridScheduler = new GridScheduler("s0.t0", worker);
         KernelContext context = new KernelContext();
 
@@ -152,6 +179,10 @@ public class TestMatrixMultiplicationKernelContext extends TornadoTestBase {
         try (TornadoExecutionPlan executionPlan = new TornadoExecutionPlan(immutableTaskGraph)) {
             executionPlan.withGridScheduler(gridScheduler) //
                     .execute();
+
+            for (int i = 0; i < 100; i++) {
+                executionPlan.execute();
+            }
         }
 
         matrixMultiplicationJava(a, b, cJava, size);
@@ -159,6 +190,9 @@ public class TestMatrixMultiplicationKernelContext extends TornadoTestBase {
         for (int i = 0; i < size * size; i++) {
             assertEquals(cJava.get(i), cTornado.get(i), 0.01f);
         }
+        /*for (int i = 0; i < WC * HC; i++) {
+            assertEquals(cJava.get(i), cTornado.get(i), 0.01f);
+        }*/
     }
 
     @Test

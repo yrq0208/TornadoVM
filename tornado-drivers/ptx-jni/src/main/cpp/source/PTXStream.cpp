@@ -396,6 +396,10 @@ JNIEXPORT jobjectArray JNICALL Java_uk_ac_manchester_tornado_drivers_ptx_PTXStre
     const char *native_function_name = env->GetStringUTFChars(function_name, 0);
     CUfunction kernel;
     CUresult result = cuModuleGetFunction(&kernel, native_module, native_function_name);
+    //opencl->ptx hack
+    //CUresult result = cuModuleGetFunction(&kernel, native_module, "matrixMultiplication1D");
+    //cubin hack
+    //CUresult result = cuModuleGetFunction(&kernel, native_module, "s0_t0_matrixmultiplication1d_uk_ac_manchester_tornado_api_kernelcontext_145581669_arrays_floatarray_arrays_floatarray_arrays_floatarray_512");
     LOG_PTX_AND_VALIDATE("cuModuleGetFunction", result);
 
     size_t arg_buffer_size = env->GetArrayLength(args);

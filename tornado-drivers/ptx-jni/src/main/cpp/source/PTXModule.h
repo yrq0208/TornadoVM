@@ -45,6 +45,22 @@ JNIEXPORT jbyteArray JNICALL Java_uk_ac_manchester_tornado_drivers_ptx_PTXModule
 
 /*
  * Class:     uk_ac_manchester_tornado_drivers_ptx_PTXModule
+ * Method:    cuModuleLoadDataEx
+ * Signature:
+ */
+JNIEXPORT jbyteArray JNICALL Java_uk_ac_manchester_tornado_drivers_ptx_PTXModule_cuModuleLoadDataEx
+        (JNIEnv *, jclass, jbyteArray); //should add 3 more args that represent the number of flags, the flag itself and the value related to the flag, these 3 args should be passed from CLI
+
+/*
+ * Class:     uk_ac_manchester_tornado_drivers_ptx_PTXModule
+ * Method:    cuModuleLoad
+ * Signature:
+ */
+JNIEXPORT jbyteArray JNICALL Java_uk_ac_manchester_tornado_drivers_ptx_PTXModule_cuModuleLoad
+        (JNIEnv *, jclass); //need to add one more arg which is jstring that represent the cubin file name pass from CLI
+
+/*
+ * Class:     uk_ac_manchester_tornado_drivers_ptx_PTXModule
  * Method:    cuModuleUnload
  * Signature: ([B)J
  */

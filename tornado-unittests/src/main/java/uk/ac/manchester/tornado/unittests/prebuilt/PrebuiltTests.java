@@ -42,6 +42,7 @@ import uk.ac.manchester.tornado.api.enums.TornadoVMBackendType;
 import uk.ac.manchester.tornado.api.exceptions.TornadoExecutionPlanException;
 import uk.ac.manchester.tornado.api.exceptions.TornadoRuntimeException;
 import uk.ac.manchester.tornado.api.runtime.TornadoRuntimeProvider;
+import uk.ac.manchester.tornado.api.types.arrays.FloatArray;
 import uk.ac.manchester.tornado.api.types.arrays.IntArray;
 import uk.ac.manchester.tornado.unittests.common.TornadoTestBase;
 import uk.ac.manchester.tornado.unittests.common.TornadoVMMultiDeviceNotSupported;
@@ -129,17 +130,25 @@ public class PrebuiltTests extends TornadoTestBase {
     @Test
     public void testPrebuilt01MultiIterations() throws TornadoExecutionPlanException {
 
-        final int numElements = 8;
-        IntArray a = new IntArray(numElements);
+        final int numElements = 512;
+        /*IntArray a = new IntArray(numElements);
         IntArray b = new IntArray(numElements);
-        IntArray c = new IntArray(numElements);
+        IntArray c = new IntArray(numElements);*/
+        FloatArray a = new FloatArray(numElements*numElements);
+        FloatArray b = new FloatArray(numElements*numElements);
+        FloatArray c = new FloatArray(numElements*numElements);
+        FloatArray cJava = new FloatArray(numElements * numElements);
 
         a.init(1);
         b.init(2);
 
         switch (backendType) {
             case PTX:
-                FILE_PATH += "add.ptx";
+                //FILE_PATH += "add.ptx";
+                //FILE_PATH = "/home/ruiqi/TornadoVM/tornado-assembly/src/examples/generated/matrixmultiplication1d.ptx";
+                //FILE_PATH = "/home/ruiqi/TornadoVM/Tornado_experiments_dump/matrixMultiplication1D.ptx";
+                //FILE_PATH = "/home/ruiqi/TornadoVM/Tornado_experiments_dump/matrixmultiplication1d.ptx";
+                FILE_PATH = "/home/ruiqi/TornadoVM/Tornado_experiments_dump/tornado_matmul1D_2.cubin";
                 break;
             case OPENCL:
                 FILE_PATH += "add.cl";
@@ -152,14 +161,15 @@ public class PrebuiltTests extends TornadoTestBase {
         }
 
         // Define accessors for each parameter
-        AccessorParameters accessorParameters = new AccessorParameters(3);
+        AccessorParameters accessorParameters = new AccessorParameters(4);
         accessorParameters.set(0, a, Access.READ_WRITE);
         accessorParameters.set(1, b, Access.READ_WRITE);
         accessorParameters.set(2, c, Access.WRITE_ONLY);
+        accessorParameters.set(3, numElements, Access.READ_ONLY);
 
         // Define the Task-Graph
         TaskGraph taskGraph = new TaskGraph("s0") //
-                .transferToDevice(DataTransferMode.EVERY_EXECUTION, a, b) //
+                .transferToDevice(DataTransferMode.EVERY_EXECUTION, a, b, numElements) //
                 .prebuiltTask("t0",      //task name
                         "add",              // name of the low-level kernel to invoke
                         FILE_PATH,          // file name
@@ -169,7 +179,18 @@ public class PrebuiltTests extends TornadoTestBase {
         // When using the prebuilt API, we need to define the WorkerGrid, otherwise it will launch 1 thread
         // on the target device
         WorkerGrid workerGrid = new WorkerGrid1D(numElements);
+        //workerGrid.setLocalWork(128, 1, 1);
         GridScheduler gridScheduler = new GridScheduler("s0.t0", workerGrid);
+
+        for (int i = 0; i < numElements; i++) {
+            for (int j = 0; j < numElements; j++) {
+                float sum = 0.0f;
+                for (int k = 0; k < numElements; k++) {
+                    sum += a.get(i * numElements + k) * b.get(k * numElements + j);
+                }
+                cJava.set(i * numElements + j, sum);
+            }
+        }
 
         // Launch the application on the target device
         try (TornadoExecutionPlan executionPlan = new TornadoExecutionPlan(taskGraph.snapshot())) {
@@ -182,9 +203,9 @@ public class PrebuiltTests extends TornadoTestBase {
             for (int i = 0; i < 10; i++) {
                 executionPlan.execute();
                 for (int j = 0; j < c.getSize(); j++) {
-                    assertEquals(a.get(j) + b.get(j), c.get(j));
+                    assertEquals(cJava.get(j), c.get(j), 0.01f);
                 }
-                IntStream.range(0, numElements).forEach(k -> a.set(k, c.get(k)));
+                //IntStream.range(0, numElements).forEach(k -> a.set(k, c.get(k)));
             }
         }
 
@@ -357,7 +378,7 @@ public class PrebuiltTests extends TornadoTestBase {
      * tornado-test -V uk.ac.manchester.tornado.unittests.prebuilt.PrebuiltTests#testPrebuiltMutiBackend
      * </code>
      * </p>
-     * 
+     *
      * @throws TornadoExecutionPlanException
      */
     @Test

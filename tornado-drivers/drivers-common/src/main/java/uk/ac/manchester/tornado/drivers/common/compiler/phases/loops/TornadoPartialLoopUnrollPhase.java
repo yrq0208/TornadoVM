@@ -30,6 +30,7 @@ import org.graalvm.compiler.nodes.loop.LoopsData;
 import org.graalvm.compiler.phases.BasePhase;
 import org.graalvm.compiler.phases.common.CanonicalizerPhase;
 import org.graalvm.compiler.phases.common.DeadCodeEliminationPhase;
+import org.graalvm.compiler.phases.common.util.LoopUtility;
 import org.graalvm.compiler.phases.tiers.MidTierContext;
 
 import uk.ac.manchester.tornado.runtime.TornadoCoreRuntime;
@@ -37,6 +38,31 @@ import uk.ac.manchester.tornado.runtime.common.TornadoOptions;
 import uk.ac.manchester.tornado.runtime.graal.nodes.TornadoLoopsData;
 import uk.ac.manchester.tornado.runtime.graal.phases.TornadoMidTierContext;
 
+import org.graalvm.collections.EconomicMap;
+import org.graalvm.collections.Equivalence;
+import org.graalvm.compiler.graph.Graph;
+import org.graalvm.compiler.nodes.LoopBeginNode;
+import org.graalvm.compiler.nodes.extended.OpaqueNode;
+import org.graalvm.compiler.phases.common.util.EconomicSetNodeEventListener;
+import org.graalvm.compiler.nodes.loop.LoopEx;
+import org.graalvm.compiler.nodes.loop.DefaultLoopPolicies;
+import org.graalvm.compiler.loop.phases.LoopTransformations;
+import static org.graalvm.compiler.loop.phases.LoopTransformations.adaptCountedLoopExitProbability;
+import org.graalvm.compiler.debug.DebugContext;
+import org.graalvm.compiler.nodes.spi.LoopsDataProvider;
+import org.graalvm.compiler.nodes.loop.LoopPolicies;
+import org.graalvm.compiler.loop.phases.LoopPhase;
+import org.graalvm.compiler.options.OptionValues;
+import static org.graalvm.compiler.nodes.loop.DefaultLoopPolicies.Options.ExactPartialUnrollMaxNodes;
+import static org.graalvm.compiler.core.common.GraalOptions.MaximumDesiredSize;
+import org.graalvm.compiler.nodes.spi.CoreProviders;
+import static org.graalvm.compiler.nodes.loop.DefaultLoopPolicies.Options.UnrollMaxIterations;
+import org.graalvm.compiler.nodes.debug.ControlFlowAnchorNode;
+import org.graalvm.compiler.graph.Node;
+import org.graalvm.compiler.nodes.Invoke;
+import org.graalvm.compiler.nodes.extended.ForeignCall;
+import org.graalvm.compiler.graph.NodeBitMap;
+import org.graalvm.compiler.nodes.spi.CoreProviders;
 /**
  * Applies partial unroll on counted loops of more than 128 elements. By default,
  * the unroll factor is set to 2 except if the user explicitly passes a
@@ -58,31 +84,101 @@ public class TornadoPartialLoopUnrollPhase extends BasePhase<MidTierContext> {
     }
 
     private static OptimizationStatus partialUnroll(StructuredGraph graph, MidTierContext context) {
+        /*EconomicSetNodeEventListener listener = new EconomicSetNodeEventListener();
+        boolean changed = true;
+        EconomicMap<LoopBeginNode, OpaqueNode> opaqueUnrolledStrides = null;
+        boolean prePostInserted = false;
 
+        CanonicalizerPhase canonicalizer = CanonicalizerPhase.create();
+
+        canonicalizer.apply(graph, context);//diff
+
+        while (changed) {
+            changed = false;
+            try (Graph.NodeEventScope nes = graph.trackNodeEvents(listener)) {
+                LoopsData dataCounted = context.getLoopsDataProvider().getLoopsData(graph);
+                //LoopsData dataCounted = new TornadoLoopsData(graph);
+                dataCounted.detectCountedLoops();
+                graph.getDebug().log(DebugContext.INFO_LEVEL, "Detected %d counted loops", dataCounted.countedLoops().size());
+                Graph.Mark mark = graph.getMark();
+                for (LoopEx loop : dataCounted.countedLoops()) {
+                    if (LoopTransformations.isUnrollableLoop(loop)) {
+                        System.out.println("isUnrollableLoop");
+                        graph.getDebug().log(DebugContext.INFO_LEVEL, "Loop %s can be unrolled, now checking if we should", loop);
+                        if (shouldPartiallyUnroll(loop, context)) { //diff
+                            System.out.println("shouldPartiallyUnroll");
+                            if (loop.loopBegin().isSimpleLoop()) {
+                                System.out.println("isSimpleLoop");
+                                // First perform the pre/post transformation and do the partial
+                                // unroll when we come around again.
+                                LoopTransformations.insertPrePostLoops(loop);
+                                prePostInserted = true;
+                                changed = true;
+                            } else if (prePostInserted) {
+                                System.out.println("prePostInserted");
+                                if (opaqueUnrolledStrides == null) {
+                                    System.out.println("reach opaqueUnrolledStrides");
+                                    opaqueUnrolledStrides = EconomicMap.create(Equivalence.IDENTITY);
+                                }
+                                System.out.println("reach LoopTransformations");
+                                LoopTransformations.partialUnroll(loop, opaqueUnrolledStrides);
+                                changed = true;
+                            }
+                        }
+                    } else {
+                        graph.getDebug().log(DebugContext.INFO_LEVEL, "Loop %s cannot be unrolled", loop);
+                        System.out.println("cannot be unrolled");
+                    }
+                }
+                dataCounted.deleteUnusedNodes();
+
+                if (!listener.getNodes().isEmpty()) {
+                    canonicalizer.applyIncremental(graph, context, listener.getNodes());
+                    listener.getNodes().clear();
+                }
+
+                assert !prePostInserted || checkCounted(graph, context.getLoopsDataProvider(), mark);
+            } catch (NullPointerException runtimeException) {
+                return OptimizationStatus.ERROR;
+            }
+        }
+        if (opaqueUnrolledStrides != null) {
+            try (Graph.NodeEventScope nes = graph.trackNodeEvents(listener)) {
+                for (OpaqueNode opaque : opaqueUnrolledStrides.getValues()) {
+                    opaque.remove();
+                }
+                if (!listener.getNodes().isEmpty()) {
+                    canonicalizer.applyIncremental(graph, context, listener.getNodes());
+                }
+            }
+        }
+        return OptimizationStatus.SUCCESS;*/
         LoopsData dataCounted;
+        CanonicalizerPhase canonicalizer = CanonicalizerPhase.create();
+        canonicalizer.apply(graph, context);
         try {
             dataCounted = new TornadoLoopsData(graph);
         } catch (NullPointerException nullPointerException) {
             return OptimizationStatus.ERROR;
         }
-
-        CanonicalizerPhase canonicalizer = CanonicalizerPhase.create();
-
-        canonicalizer.apply(graph, context);
         dataCounted.detectCountedLoops();
         try {
             dataCounted.countedLoops().forEach(loop -> {
-                int loopBound = loop.counted().getLimit().asJavaConstant().asInt();
-                if (isPowerOfTwo(loopBound) && (loopBound < LOOP_BOUND_UPPER_LIMIT)) {
-                    LoopFragmentInside loopBody = loop.inside().duplicate();
-                    loopBody.insertWithinAfter(loop, null);
+                if (LoopTransformations.isUnrollableLoop(loop)) {
+                    int loopBound = loop.counted().getLimit().asJavaConstant().asInt();
+                    if (isPowerOfTwo(loopBound) && (loopBound < LOOP_BOUND_UPPER_LIMIT)) {
+                        LoopFragmentInside loopBody = loop.inside().duplicate();
+                        loopBody.insertWithinAfter(loop, null);
+                    }
                 }
             });
 
             new DeadCodeEliminationPhase().apply(graph);
+
         } catch (NullPointerException runtimeException) {
             return OptimizationStatus.ERROR;
         }
+
         return OptimizationStatus.SUCCESS;
     }
 
@@ -107,8 +203,98 @@ public class TornadoPartialLoopUnrollPhase extends BasePhase<MidTierContext> {
         return status != OptimizationStatus.SUCCESS ? snapshot : graph;
     }
 
+    /*private static boolean checkCounted(StructuredGraph graph, LoopsDataProvider loopsDataProvider, Graph.Mark mark) {
+        LoopsData dataCounted;
+        dataCounted = loopsDataProvider.getLoopsData(graph);
+        dataCounted.detectCountedLoops();
+        for (LoopEx anyLoop : dataCounted.loops()) {
+            if (graph.isNew(mark, anyLoop.loopBegin())) {
+                assert anyLoop.isCounted() : "pre/post transformation loses counted loop " + anyLoop.loopBegin();
+            }
+        }
+        return true;
+    }*/
+
+    /*private static boolean shouldPartiallyUnroll(LoopEx loop, MidTierContext providers) {//diff
+        LoopBeginNode loopBegin = loop.loopBegin();
+        if (!loop.isCounted()) {
+            loopBegin.getDebug().log(DebugContext.VERBOSE_LEVEL, "shouldPartiallyUnroll %s isn't counted", loopBegin);
+            System.out.println("isn't counted");
+            return false;
+        }
+        OptionValues options = loop.entryPoint().getOptions();
+        int maxNodes = ExactPartialUnrollMaxNodes.getValue(options);
+        maxNodes = Math.min(maxNodes, Math.max(0, MaximumDesiredSize.getValue(options) - loop.loopBegin().graph().getNodeCount()));
+        //maxNodes = Math.min(maxNodes, Math.max(0, GRAPH_NODES_UPPER_LIMIT - loop.loopBegin().graph().getNodeCount())); //change this doesn't seem to affect the value of maxnode anyway
+        //System.out.println("maxNodes: " +maxNodes);
+        int size = Math.max(1, loop.size() - 1 - loop.loopBegin().phis().count());
+        int unrollFactor = loopBegin.getUnrollFactor(); //changed this cuz otherwise unroll factor = 1
+        //int unrollFactor = getUnrollFactor();
+        //System.out.println("unroll factor: " +unrollFactor);
+        //int unrollFactor = 2;
+        if (unrollFactor == 1) {
+            double loopFrequency = loop.localLoopFrequency();
+            //double loopFrequency = 100;
+            System.out.println("loopFrequency: " +loopFrequency);
+            if (loopBegin.isSimpleLoop() && loopFrequency < 5.0) {
+                loopBegin.getDebug().log(DebugContext.VERBOSE_LEVEL, "shouldPartiallyUnroll %s frequency too low %s ", loopBegin, loopFrequency);
+                System.out.println("frequency too low");
+                return false;
+            }
+            loopBegin.setLoopOrigFrequency(loopFrequency);
+        }
+        //double loopFrequency = loop.localLoopFrequency();
+        //loopBegin.setLoopOrigFrequency(loopFrequency);
+        int maxUnroll = UnrollMaxIterations.getValue(options);
+        // Now correct size for the next unroll. UnrollMaxIterations == 1 means perform the
+        // pre/main/post transformation but don't actually unroll the main loop.
+        size += size;
+        if (maxUnroll == 1 && loopBegin.isSimpleLoop() || size <= maxNodes && unrollFactor < maxUnroll) {
+            // Will the next unroll fit?
+            if ((int) loopBegin.loopOrigFrequency() < (unrollFactor * 2)) {
+                int frequency = (int) loopBegin.loopOrigFrequency();
+                System.out.println("loop frequency: " +frequency);
+                System.out.println("loopOrigFrequency() < (unrollFactor * 2)");
+                return false;
+            }
+            // Check whether we're allowed to unroll this loop
+            for (Node node : loop.inside().nodes()) {
+                if (node instanceof ControlFlowAnchorNode) {
+                    System.out.println("ControlFlowAnchorNode");
+                    return false;
+                }
+                if (node instanceof Invoke || node instanceof ForeignCall) {
+                    System.out.println("Invoke || ForeignCall");
+                    return false;
+                }
+            }
+            return true;
+        } else {
+            loopBegin.getDebug().log(DebugContext.VERBOSE_LEVEL, "shouldPartiallyUnroll %s unrolled loop is too large %s ", loopBegin, size);
+            System.out.println("unrolled loop is too large");
+            return false;
+        }
+    }*/
+
     @Override
     protected void run(StructuredGraph graph, MidTierContext context) {
+        /*EconomicSetNodeEventListener listener = new EconomicSetNodeEventListener();
+        StructuredGraph snapshot = (StructuredGraph) graph.copy(TornadoCoreRuntime.getDebugContext());
+        CanonicalizerPhase canonicalizer = CanonicalizerPhase.create();
+        if (graph.hasLoops()) {
+            try (Graph.NodeEventScope nes = graph.trackNodeEvents(listener)) {
+                //unroll(graph, context);
+                OptimizationStatus status = partialUnroll(graph, context);
+                graph = checkStatus(graph, snapshot, status);
+                if (status != OptimizationStatus.SUCCESS) {
+                    return;
+                }
+            }
+            if (!listener.getNodes().isEmpty()) {
+                // run a regular canonicalization with simplification after the entire unrolling
+                canonicalizer.applyIncremental(graph, context, listener.getNodes());
+            }
+        }*/
 
         TornadoMidTierContext tornadoMidTierContext = (TornadoMidTierContext) context;
         if (!tornadoMidTierContext.getMeta().applyPartialLoopUnroll()) {

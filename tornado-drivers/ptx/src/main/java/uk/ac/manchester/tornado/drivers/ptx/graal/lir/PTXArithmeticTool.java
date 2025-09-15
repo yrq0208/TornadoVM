@@ -363,10 +363,15 @@ public class PTXArithmeticTool extends ArithmeticLIRGenerator {
         LIRKind resultKind = LIRKind.combine(op1, op2, op3);
         Variable result = getGen().newVariable(resultKind);
         PTXTernaryOp op;
-        if (TornadoOptions.FAST_MATH_OPTIMIZATIONS) {
+        /*if (TornadoOptions.FAST_MATH_OPTIMIZATIONS) {
             op = ((PTXKind) resultKind.getPlatformKind()).isFloating() ? PTXTernaryOp.MAD : PTXTernaryOp.MAD_LO;
         } else {
             op = PTXTernaryOp.FMA;
+        }*/
+        if (TornadoOptions.ENABLE_PTXFMA) {
+            op = PTXTernaryOp.FMA;
+        } else {
+            op = ((PTXKind) resultKind.getPlatformKind()).isFloating() ? PTXTernaryOp.MAD : PTXTernaryOp.MAD_LO;
         }
         getGen().append(new PTXLIRStmt.AssignStmt(result, new PTXTernary.Expr(op, resultKind, op1, op2, op3)));
         return result;
