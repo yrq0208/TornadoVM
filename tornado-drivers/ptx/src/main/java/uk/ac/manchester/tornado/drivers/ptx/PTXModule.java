@@ -42,6 +42,10 @@ public class PTXModule {
 
     private static native byte[] cuModuleLoadData(byte[] source);
 
+    private static native byte[] cuModuleLoadDataEx(byte[] source);
+
+    private static native byte[] cuModuleLoad();
+
     private static native long cuModuleUnload(byte[] module);
 
     private static native int cuOccupancyMaxPotentialBlockSize(byte[] module, String funcName);
