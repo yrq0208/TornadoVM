@@ -368,7 +368,7 @@ public class PTXArithmeticTool extends ArithmeticLIRGenerator {
         } else {
             op = PTXTernaryOp.FMA;
         }*/
-        if (TornadoOptions.ENABLE_PTXFMA) {
+        if (TornadoOptions.FAST_MATH_OPTIMIZATIONS) {
             op = PTXTernaryOp.FMA;
         } else {
             op = ((PTXKind) resultKind.getPlatformKind()).isFloating() ? PTXTernaryOp.MAD : PTXTernaryOp.MAD_LO;
