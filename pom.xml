@@ -466,6 +466,10 @@
                                 <arg>
                                     jdk.internal.vm.compiler/org.graalvm.compiler.core.common.memory=tornado.drivers.common
                                 </arg>
+                                <arg>--add-exports</arg>
+                                <arg>
+                                    jdk.internal.vm.compiler/org.graalvm.compiler.phases.common.util=tornado.drivers.common
+                                </arg>
                                 <!-- OpenCL exports-->
                                 <arg>--add-opens</arg>
                                 <arg>java.base/java.lang=tornado.drivers.opencl</arg>
@@ -1308,6 +1312,10 @@
                                 <arg>--add-exports</arg>
                                 <arg>
                                     jdk.internal.vm.compiler/org.graalvm.compiler.core.common.memory=tornado.drivers.common
+                                </arg>
+                                <arg>--add-exports</arg>
+                                <arg>
+                                    jdk.internal.vm.compiler/org.graalvm.compiler.phases.common.util=tornado.drivers.common
                                 </arg>
                                 <!-- OpenCL exports-->
                                 <arg>--add-opens</arg>
