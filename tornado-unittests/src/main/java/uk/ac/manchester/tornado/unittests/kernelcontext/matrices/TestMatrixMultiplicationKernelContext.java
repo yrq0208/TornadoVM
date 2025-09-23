@@ -127,7 +127,7 @@ public class TestMatrixMultiplicationKernelContext extends TornadoTestBase {
 
     @Test
     public void mxm1DKernelContext() throws TornadoExecutionPlanException {
-        final int size = 16;
+        final int size = 512;
         FloatArray a = new FloatArray(size * size);
         FloatArray b = new FloatArray(size * size);
         FloatArray cJava = new FloatArray(size * size);
@@ -140,6 +140,7 @@ public class TestMatrixMultiplicationKernelContext extends TornadoTestBase {
         });
 
         WorkerGrid worker = new WorkerGrid1D(size);
+        worker.setLocalWork(512,1, 1);
         GridScheduler gridScheduler = new GridScheduler("s0.t0", worker);
         KernelContext context = new KernelContext();
 
@@ -152,6 +153,10 @@ public class TestMatrixMultiplicationKernelContext extends TornadoTestBase {
         try (TornadoExecutionPlan executionPlan = new TornadoExecutionPlan(immutableTaskGraph)) {
             executionPlan.withGridScheduler(gridScheduler) //
                     .execute();
+
+            for (int i = 0; i < 100; i++) {
+                executionPlan.execute();
+            }
         }
 
         matrixMultiplicationJava(a, b, cJava, size);
